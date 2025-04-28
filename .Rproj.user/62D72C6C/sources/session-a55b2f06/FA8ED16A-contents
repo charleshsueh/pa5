@@ -17,6 +17,7 @@ library(knitr)
 library(here)
 library(mice)
 library(ds4ling)
+library(performance)
 ```
 
 
@@ -187,9 +188,9 @@ However, both years have outliers, particularly on the lower end, indicating som
 model <- lmer(enjoy ~ year + (1 | id), data = data_final)
 
 # Print model summary
-model_summary <- summary(model)
-cat("\nModel Summary:\n")
-print(model_summary)
+summary(model)
+
+
 
 # Check model assumptions (residual diagnostics)
 # Residuals vs. fitted values plot
@@ -211,12 +212,18 @@ ggplot(data = NULL, aes(sample = residuals)) +
 
 ```
 
+```{r}
+R2 = r2(model)$R2_marginal
+R2
+```
+
+
 
 ## Results
 
 #### Statistical Analysis
 
-A linear mixed-effects model was used to assess the effect of class year (2023 vs. 2025) on enjoyment scores, with student ID as a random effect to account for individual differences. The fixed effect of year (2025 vs. 2023) was not significant (β = 0.080, SE = 0.044, p = 0.070), indicating no significant difference in enjoyment scores between the two years. The random effect of ID explained a portion of the variance (ICC = 0.378), suggesting some individual differences in baseline enjoyment levels. The model explained approximately 1.9% of the variance in enjoyment scores (marginal R²).
+A linear mixed-effects model was fitted using REML to evaluate the effect of class year (2023 vs. 2025) on enjoyment scores, with student ID included as a random effect to account for individual differences. The fixed effect of year (2025 vs. 2023) was not statistically significant (β = 0.034, SE = 0.034, t = 1.002, p ≈ 0.317), suggesting no meaningful difference in enjoyment scores between the two years. The random effect of student ID explained approximately 31.9% of the variance in enjoyment scores (ICC = 0.319), indicating notable individual variability in baseline enjoyment levels. The model's marginal R² was low (approximately 0.5%), reflecting that class year alone accounts for a minimal portion of the variance in enjoyment scores.
 
 
 #### Interpretation
@@ -225,14 +232,13 @@ The analysis indicates no statistically significant difference in enjoyment scor
 
 #### Model Assumptions and Decisions
 
-The linear mixed-effects model assumes linearity, normality of residuals, and independence of observations within clusters (students). The residuals vs. fitted values plot shows no clear pattern, suggesting the linearity assumption holds, though some slight heteroscedasticity may be present. The Q-Q plot indicates that residuals are approximately normally distributed, with minor deviations at the tails, which is acceptable for a sample of this size. The independence assumption within students may be violated if enjoyment scores are influenced by unmodeled temporal effects (e.g., week-to-week changes), but this was mitigated by focusing on the year effect. A key decision was to treat year as a fixed effect and include ID as a random effect, which accounts for individual variability and improves generalizability. An advantage of this model is its ability to handle nested data (repeated measures within students). A disadvantage is its simplicity—it does not account for potential interactions (e.g., between year and week) or other predictors (e.g., difficulty scores), which could be explored in future analyses. Alternative models, such as a simple t-test, were not used because they ignore the repeated measures structure of the data.
-
+The linear mixed-effects model assumes linearity, normality of residuals, and independence of observations within clusters (students). The residuals vs. fitted values plot shows no clear pattern, suggesting the linearity assumption holds, though some slight heteroscedasticity may be present. The Q-Q plot indicates that residuals are approximately normally distributed, with minor deviations at the tails, which is acceptable for a sample of this size. The independence assumption within students may be violated if enjoyment scores are influenced by unmodeled temporal effects (e.g., week-to-week changes), but this was mitigated by focusing on the year effect. A key decision was to treat year as a fixed effect and include ID as a random effect, which accounts for individual variability and improves generalizability. An advantage of this model is its ability to handle nested data (repeated measures within students). A disadvantage is its simplicity—it does not account for potential interactions (e.g., between year and week) or other predictors (e.g., difficulty scores), which could be explored in future analyses. 
 
 # Q2: Difficulty as a function of time
 ### Give the null hypothesis and Tidy data
 
 ```{r}
-# Load required libraries for data manipulation, plotting, modeling, and table formatting
+# Load required libraries 
 library(here)
 library(tidyverse)
 library(dplyr)
@@ -240,7 +246,7 @@ library(ds4ling)
 library(knitr)
 library(ggplot2)
 library(lme4)
-library(lmerTest) # For p-values in summary
+library(lmerTest)
 
 # A priori hypothesis
 # Hypothesis: Perceived difficulty ratings will increase over the course of the semester as course content becomes more complex.
@@ -258,25 +264,35 @@ tidy_data1 <- data_raw1 |>
   filter(!is.na(week), !is.na(id), is.numeric(week), difficulty >= 0 | is.na(difficulty), difficulty <= 1 | is.na(difficulty)) |>
   mutate(week = as.integer(week))
 
+# Debug: Print structure of tidy_data1 to confirm 'difficulty' exists before left_join()
+print("Structure of tidy_data1 before left_join():")
+str(tidy_data1)
+
 # Create a complete data1set
 # This ensures each ID has an entry for every week, with NA for missing difficulty ratings(help by GPT)
 complete_data1 <- expand.grid(id = unique(tidy_data1$id), week = 1:11) |>
   left_join(tidy_data1, by = c("id", "week"))
 
 # Impute missing difficulty values using regression imputation
-reg_model <- complete_data1 |>
-  filter(!is.na(difficulty)) |>
-  lm(difficulty ~ week, data1 = _)
+reg_model <- lm(
+  difficulty ~ week,
+  data = complete_data1 |>
+    filter(!is.na(difficulty))
+)
 
 # Predict difficulty for missing values and create imputed_data1
 imputed_data1 <- complete_data1 |>
   mutate(
     difficulty = ifelse(
       is.na(difficulty),
-      predict(reg_model, newdata1 = data.frame(week = week)),
+      predict(
+        reg_model,
+        newdata = data.frame(week = week)
+      ),
       difficulty
     )
   )
+
 
 # Compute descriptive statistics by week on imputed data1
 desc_stats <- imputed_data1 |>
@@ -358,10 +374,10 @@ print(difficulty_plot)
 ```{r}
 # Fit nested and inclusive models to test the main effect of time
 # Nested model: Intercept-only with random intercept for id
-nested_model <- lmer(difficulty ~ 1 + (1 | id), data1 = imputed_data1, REML = FALSE)
+nested_model <- lmer(difficulty ~ 1 + (1 | id), data = imputed_data1, REML = FALSE)
 
 # Inclusive model: Fixed effects for week and week^2, random intercept for id
-inclusive_model <- lmer(difficulty ~ week + I(week^2) + (1 | id), data1 = imputed_data1, REML = FALSE)
+inclusive_model <- lmer(difficulty ~ week + I(week^2) + (1 | id), data = imputed_data1, REML = FALSE)
 
 # Nested model comparison using likelihood ratio test
 model_comparison <- anova(nested_model, inclusive_model)
@@ -399,34 +415,32 @@ summary(inclusive_model)
 
 # Test model assumptions
 # Residuals vs. fitted to check for homoscedasticity
-residuals_fitted <- ggplot(data1 = data.frame(fitted = fitted(inclusive_model),
+residuals_fitted <- ggplot(data = data.frame(fitted = fitted(inclusive_model),
            residuals = residuals(inclusive_model)),
            aes(x = fitted, y = residuals)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(title = "Residuals vs. Fitted Values", x = "Fitted Values", y = "Residuals")
-
+print(residuals_fitted)
 
 # Q-Q plot to check normality of residuals
-qq_plot <- ggplot(data1 = data.frame(residuals = residuals(inclusive_model)),
+qq_plot <- ggplot(data = data.frame(residuals = residuals(inclusive_model)),
                  aes(sample = residuals)) +
   stat_qq() +
   stat_qq_line() +
   labs(title = "Q-Q Plot of Residuals")
-
+print(qq_plot)
 ```
 
-```{r}
+
 # Write up the results
 
 ## Description of statistical analyses:
-# To investigate whether perceived difficulty ratings increase over the 2025 semester, we conducted a multi-step analysis. First, we tidied the data1 by filtering for 2025 responses, removing duplicates, and creating a complete data1set for all IDs across weeks 1–11, imputing missing difficulty ratings using linear regression (difficulty ~ week). Descriptive statistics were computed to summarize difficulty trends, followed by a line plot with a loess smooth to visualize the trajectory of mean difficulty ratings over weeks. We then fitted linear mixed-effects models (LMMs) to test the main effect of time, using a nested model (intercept-only with random intercept for id) and an inclusive model (fixed effects for week and week^2, random intercept for id). A likelihood ratio test (LRT) compared the models to assess the effect of time, and parameter estimates from the inclusive model were reported to describe the relationship. Model assumptions were checked using residual diagnostics, and goodness of fit was evaluated via variance explained by fixed and random effects.
+#### To investigate whether perceived difficulty ratings increase over the 2025 semester, we conducted a multi-step analysis. First, we tidied the data1 by filtering for 2025 responses, removing duplicates, and creating a complete data1set for all IDs across weeks 1–11, imputing missing difficulty ratings using linear regression (difficulty ~ week). Descriptive statistics were computed to summarize difficulty trends, followed by a line plot with a loess smooth to visualize the trajectory of mean difficulty ratings over weeks. We then fitted linear mixed-effects models (LMMs) to test the main effect of time, using a nested model (intercept-only with random intercept for id) and an inclusive model (fixed effects for week and week^2, random intercept for id). A likelihood ratio test (LRT) compared the models to assess the effect of time, and parameter estimates from the inclusive model were reported to describe the relationship. Model assumptions were checked using residual diagnostics, and goodness of fit was evaluated via variance explained by fixed and random effects.
 
 ## Interpretation of results:
-# The LRT indicated a significant main effect of time (χ²(2) = 5.417, p = 0.067), though at a marginal level (p < 0.10), suggesting that difficulty ratings change over the semester. The inclusive model’s parameter estimates show an intercept of 0.3105 (p < 0.001), a positive linear effect of week (β = 0.0424, p = 0.077), and a negative quadratic effect (β = -0.0027, p = 0.169), indicating a slight increase in difficulty that peaks mid-semester before declining, consistent with the plot’s loess curve. The random effects variance shows individual differences (id variance = 0.0106, SD = 0.1031) and residual variance (0.0377, SD = 0.1942). The marginal R² (fixed effects) and conditional R² (fixed + random effects) can be computed to assess goodness of fit; assuming typical values for LMMs with imputed data1, the model explains a modest proportion of variance (e.g., marginal R² ≈ 0.05–0.10, conditional R² ≈ 0.15–0.20), reflecting the flat trend observed in the plot. These results partially support the hypothesis of increasing difficulty, but the marginal significance and flat trajectory suggest other factors (e.g., course content, student adaptation) may influence perceptions.
+#### The LRT indicated a significant main effect of time (χ²(2) = 5.417, p = 0.067), though at a marginal level (p < 0.10), suggesting that difficulty ratings change over the semester. The inclusive model’s parameter estimates show an intercept of 0.3105 (p < 0.001), a positive linear effect of week (β = 0.0424, p = 0.077), and a negative quadratic effect (β = -0.0027, p = 0.169), indicating a slight increase in difficulty that peaks mid-semester before declining, consistent with the plot’s loess curve. The random effects variance shows individual differences (id variance = 0.0106, SD = 0.1031) and residual variance (0.0377, SD = 0.1942). 
 
 ## Discuss model assumptions and decisions:
-# The LMM assumes linearity (addressed via the quadratic term), normality of residuals, homoscedasticity, and independence of observations within IDs. Residual diagnostics (not shown) likely reveal minor deviations: residuals vs. fitted plots may show slight heteroscedasticity due to imputation reducing variability, and Q-Q plots may indicate non-normality at the tails, common in bounded data1 (difficulty 0–1). The assumption of missing at random (MAR) for imputation may be violated if missingness relates to difficulty (e.g., students dropping out due to high difficulty), potentially biasing estimates. Decisions included filtering for 2025 to ensure consistency, treating Anonymous IDs as distinct respondents due to ambiguity, and using regression imputation to handle missing data1. Advantages include a complete data1set for analysis, avoiding case-wise deletion, and enabling longitudinal modeling. Disadvantages include potential bias from imputation (underestimating variability) and the inability to track unique respondents accurately due to Anonymous ID duplicates. Alternative approaches, such as multiple imputation or excluding anonymous respondents, could improve robustness but were not feasible given the data1 structure and assignment scope.
-```
-
+#### The LMM assumes linearity a linear relationship between week and perceived difficulty, normally distributed residuals with constant variance (homoscedasticity), and independence of residuals across observations within each student. The residuals vs. fitted plot shows points scattered fairly symmetrically around zero with no obvious curvature, suggesting the linearity assumption holds reasonably well. There is a slight increase in spread at the upper end of the fitted values and a few outlying residuals (±0.5–0.7), but the overall variance remains relatively stable across the range. The Q–Q plot indicates that most residuals fall along the 45° line, but there are modest departures in the extreme tails—particularly a handful of heavy‐tail points at both ends—reflecting the bounded 0–1 scale of the difficulty ratings.
 

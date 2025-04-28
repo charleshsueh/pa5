@@ -2,12 +2,7 @@
 "0","model <- lmer(enjoy ~ year + (1 | id), data = data_final)"
 "0",""
 "0","# Print model summary"
-"0","model_summary <- summary(model)"
-"0","cat(""\nModel Summary:\n"")"
-"1","
-Model Summary:
-"
-"0","print(model_summary)"
+"0","summary(model)"
 "1","Linear mixed model fit by REML ['lmerMod']
 "
 "1","Formula:"
@@ -108,12 +103,11 @@ year2025"
 "0","# Residuals vs. fitted values plot"
 "0","residuals <- resid(model)"
 "0","fitted <- fitted(model)"
-"0","diag_plot1 <- ggplot(data = NULL, aes(x = fitted, y = residuals)) +"
+"0","ggplot(data = NULL, aes(x = fitted, y = residuals)) +"
 "0","  geom_point() +"
 "0","  geom_hline(yintercept = 0, linetype = ""dashed"", color = ""red"") +"
 "0","  theme_minimal() +"
 "0","  labs(title = ""Residuals vs Fitted Values"", x = ""Fitted Values"", y = ""Residuals"")"
-"0","diag_plot1"
 "2","錯誤發生在 (function (filename = ""Rplot%03d.png"", width = 480, height = 480, ： 
   無法啟動 png()裝置
 "
