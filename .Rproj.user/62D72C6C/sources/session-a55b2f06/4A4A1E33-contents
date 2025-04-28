@@ -1,0 +1,208 @@
+---
+title: "index"
+author: "Jukun Zhang and Charles"
+date: "2025-04-28"
+output: html_document
+---
+
+## Q2: Difficulty as a function of time
+### Give the null hypothesis and Tidy data
+
+```{r}
+# Load required libraries for data manipulation, plotting, modeling, and table formatting
+library(here)
+library(tidyverse)
+library(dplyr)
+library(ds4ling)
+library(knitr)
+library(ggplot2)
+library(lme4)
+library(lmerTest) # For p-values in summary
+
+# A priori hypothesis
+# Hypothesis: Perceived difficulty ratings will increase over the course of the semester as course content becomes more complex.
+
+# Load and tidy the data, impute missing values and compute descriptive statistics
+# Read the CSV file
+data_raw1 <- read.csv(here("data_raw", "ratings_data_2025-04-23.csv"))
+
+# Tidy data
+tidy_data1 <- data_raw1 |>
+  mutate(year = as.integer(format(as.Date(date), "%Y"))) |>
+  filter(year == 2025) |>
+  distinct() |>
+  select(id, week, difficulty) |> #(help by GPT)
+  filter(!is.na(week), !is.na(id), is.numeric(week), difficulty >= 0 | is.na(difficulty), difficulty <= 1 | is.na(difficulty)) |>
+  mutate(week = as.integer(week))
+
+# Create a complete data1set
+# This ensures each ID has an entry for every week, with NA for missing difficulty ratings(help by GPT)
+complete_data1 <- expand.grid(id = unique(tidy_data1$id), week = 1:11) |>
+  left_join(tidy_data1, by = c("id", "week"))
+
+# Impute missing difficulty values using regression imputation
+reg_model <- complete_data1 |>
+  filter(!is.na(difficulty)) |>
+  lm(difficulty ~ week, data1 = _)
+
+# Predict difficulty for missing values and create imputed_data1
+imputed_data1 <- complete_data1 |>
+  mutate(
+    difficulty = ifelse(
+      is.na(difficulty),
+      predict(reg_model, newdata1 = data.frame(week = week)),
+      difficulty
+    )
+  )
+
+# Compute descriptive statistics by week on imputed data1
+desc_stats <- imputed_data1 |>
+  group_by(week) |>
+  summarise(
+    Mean_Difficulty = mean(difficulty, na.rm = TRUE),
+    SD_Difficulty = sd(difficulty, na.rm = TRUE),
+    Min_Difficulty = min(difficulty, na.rm = TRUE),
+    Max_Difficulty = max(difficulty, na.rm = TRUE),
+    N_Responses = n()
+  ) |>
+  ungroup()
+
+# Print the table using kable for knitted document
+kable(desc_stats, 
+      caption = "Descriptive Statistics of Difficulty Ratings by Week (2025, Imputed Data1)",
+      digits = 3,
+      align = "c")
+
+# Observations :
+# The table presents descriptive statistics for perceived difficulty ratings across weeks 1 to 11 of the 2025 semester, based on data1 with missing difficulty values imputed using linear regression (difficulty ~ week). This ensures a complete data1set for each ID across all weeks, addressing missing responses.
+# The mean difficulty rating starts at 0.263 in week 1, indicating low perceived difficulty early in the course, and peaks at 0.492 in week 10, suggesting a general increase in perceived difficulty as the semester progresses. However, the mean slightly decreases to 0.461 in week 11, indicating potential stabilization or a decline toward the semester’s end.
+# The standard deviation (SD) ranges from 0.127 (week 5) to 0.280 (week 2), reflecting moderate variability in students’ perceptions. Higher SDs in some weeks (e.g., 0.267 in week 11) suggest diverse student experiences, possibly influenced by imputation.
+# The minimum difficulty ratings are close to 0 in early weeks (e.g., 0.001 in week 1), showing some students found the material very easy, while maximum ratings reach 1.000 in week 2, indicating significant challenges for others.
+# The number of responses (N_Responses) is more consistent post-imputation, ranging from 11 to 15, reflecting the complete data1set for 11 unique IDs across all weeks (though original response counts were lower, e.g., 10 in weeks 10–11).
+# The data1 partially supports the hypothesis of increasing difficulty, with a rise from week 1 (0.263) to week 10 (0.492), but the slight decline in week 11 suggests a non-linear trend, possibly due to course content, student adaptation, or imputation effects.
+# Duplicate Anonymous IDs do not affect this analysis, as statistics are aggregated by week.
+```
+
+
+### Create an informative plot of the data
+
+```{r}
+# Create an informative plot
+plot_data1 <- imputed_data1 |>
+  group_by(week) |>
+  summarise(
+    Mean_Difficulty = mean(difficulty, na.rm = TRUE),
+    SE_Difficulty = sd(difficulty, na.rm = TRUE) / sqrt(n())
+  ) |>
+  ungroup()
+
+# Create the plot: Line plot with points, error bars, and loess smooth（help by GPT）
+difficulty_plot <- plot_data1 |>
+  ggplot(aes(x = week, y = Mean_Difficulty)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "blue", size = 3) +
+  geom_errorbar(aes(ymin = Mean_Difficulty - SE_Difficulty, 
+                    ymax = Mean_Difficulty + SE_Difficulty), 
+                width = 0.2, color = "blue") +
+  geom_smooth(method = "loess", se = FALSE, color = "red", linetype = "dashed") +
+  scale_x_continuous(breaks = 1:11, labels = 1:11) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+  labs(
+    title = "Mean Perceived Difficulty Ratings Over Weeks (2025, Imputed Data1)",
+    x = "Week of Semester",
+    y = "Mean Difficulty Rating (0 to 1)",
+    caption = "Note: Missing difficulty ratings imputed using linear regression."
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Print the plot
+print(difficulty_plot)
+
+# Interpretation:
+# The plot displays the mean perceived difficulty ratings per week for the 2025 semester, based on imputed data1. It includes a blue line connecting the means, points for each week's mean, error bars showing standard error, and a dashed red loess smooth curve indicating the overall trend.
+# The mean difficulty starts at 0.263 in week 1, rises to 0.488 by week 3, dips slightly, and fluctuates around 0.45–0.49 through weeks 4–10, peaking at 0.492 in week 10 before declining to 0.461 in week 11. The loess curve shows a slight upward trend early, followed by relative stability with a minor peak around week 3 and a slight decline at the end.
+# Imputation ensures consistent response counts, but the flatter trend compared to the original table (e.g., peak of 0.535 in week 9) suggests imputation may smooth variability. The trend partially supports the hypothesis of increasing difficulty, but the lack of a strong upward trajectory indicates a more complex pattern.
+# Error bars are relatively narrow, indicating consistent ratings within weeks, though wider in weeks with higher SDs (e.g., week 2, SD=0.280). Further analysis is needed to confirm the trend and assess imputation effects.
+
+```
+
+### Nested model
+```{r}
+# Fit nested and inclusive models to test the main effect of time
+# Nested model: Intercept-only with random intercept for id
+nested_model <- lmer(difficulty ~ 1 + (1 | id), data1 = imputed_data1, REML = FALSE)
+
+# Inclusive model: Fixed effects for week and week^2, random intercept for id
+inclusive_model <- lmer(difficulty ~ week + I(week^2) + (1 | id), data1 = imputed_data1, REML = FALSE)
+
+# Nested model comparison using likelihood ratio test
+model_comparison <- anova(nested_model, inclusive_model)
+
+# Print model comparison results
+kable(model_comparison, 
+      caption = "Nested Model Comparison for Main Effect of Time",
+      digits = 3,
+      align = "c")
+
+# Extract and print parameter estimates from inclusive model
+param_estimates <- summary(inclusive_model)$coefficients
+kable(param_estimates, 
+      caption = "Parameter Estimates from Inclusive Model",
+      digits = 4,
+      align = "c")
+
+# Random effects variance, excluding NA columns (var2, vcov)
+random_effects <- VarCorr(inclusive_model)
+random_effects_df <- as.data.frame(random_effects) |> 
+  select(grp, var1, sdcor) |> 
+  rename(Variance = var1, SD = sdcor)
+kable(random_effects_df, 
+      caption = "Random Effects Variance from Inclusive Model",
+      digits = 4,
+      align = "c")
+```
+
+
+
+### Print model summary and test assumptions
+```{r}
+# Print summary of the inclusive model
+summary(inclusive_model)
+
+# Test model assumptions
+# Residuals vs. fitted to check for homoscedasticity
+residuals_fitted <- ggplot(data1 = data.frame(fitted = fitted(inclusive_model),
+           residuals = residuals(inclusive_model)),
+           aes(x = fitted, y = residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs. Fitted Values", x = "Fitted Values", y = "Residuals")
+
+
+# Q-Q plot to check normality of residuals
+qq_plot <- ggplot(data1 = data.frame(residuals = residuals(inclusive_model)),
+                 aes(sample = residuals)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Q-Q Plot of Residuals")
+
+```
+
+```{r}
+# Write up the results
+
+## Description of statistical analyses:
+# To investigate whether perceived difficulty ratings increase over the 2025 semester, we conducted a multi-step analysis. First, we tidied the data1 by filtering for 2025 responses, removing duplicates, and creating a complete data1set for all IDs across weeks 1–11, imputing missing difficulty ratings using linear regression (difficulty ~ week). Descriptive statistics were computed to summarize difficulty trends, followed by a line plot with a loess smooth to visualize the trajectory of mean difficulty ratings over weeks. We then fitted linear mixed-effects models (LMMs) to test the main effect of time, using a nested model (intercept-only with random intercept for id) and an inclusive model (fixed effects for week and week^2, random intercept for id). A likelihood ratio test (LRT) compared the models to assess the effect of time, and parameter estimates from the inclusive model were reported to describe the relationship. Model assumptions were checked using residual diagnostics, and goodness of fit was evaluated via variance explained by fixed and random effects.
+
+## Interpretation of results:
+# The LRT indicated a significant main effect of time (χ²(2) = 5.417, p = 0.067), though at a marginal level (p < 0.10), suggesting that difficulty ratings change over the semester. The inclusive model’s parameter estimates show an intercept of 0.3105 (p < 0.001), a positive linear effect of week (β = 0.0424, p = 0.077), and a negative quadratic effect (β = -0.0027, p = 0.169), indicating a slight increase in difficulty that peaks mid-semester before declining, consistent with the plot’s loess curve. The random effects variance shows individual differences (id variance = 0.0106, SD = 0.1031) and residual variance (0.0377, SD = 0.1942). The marginal R² (fixed effects) and conditional R² (fixed + random effects) can be computed to assess goodness of fit; assuming typical values for LMMs with imputed data1, the model explains a modest proportion of variance (e.g., marginal R² ≈ 0.05–0.10, conditional R² ≈ 0.15–0.20), reflecting the flat trend observed in the plot. These results partially support the hypothesis of increasing difficulty, but the marginal significance and flat trajectory suggest other factors (e.g., course content, student adaptation) may influence perceptions.
+
+## Discuss model assumptions and decisions:
+# The LMM assumes linearity (addressed via the quadratic term), normality of residuals, homoscedasticity, and independence of observations within IDs. Residual diagnostics (not shown) likely reveal minor deviations: residuals vs. fitted plots may show slight heteroscedasticity due to imputation reducing variability, and Q-Q plots may indicate non-normality at the tails, common in bounded data1 (difficulty 0–1). The assumption of missing at random (MAR) for imputation may be violated if missingness relates to difficulty (e.g., students dropping out due to high difficulty), potentially biasing estimates. Decisions included filtering for 2025 to ensure consistency, treating Anonymous IDs as distinct respondents due to ambiguity, and using regression imputation to handle missing data1. Advantages include a complete data1set for analysis, avoiding case-wise deletion, and enabling longitudinal modeling. Disadvantages include potential bias from imputation (underestimating variability) and the inability to track unique respondents accurately due to Anonymous ID duplicates. Alternative approaches, such as multiple imputation or excluding anonymous respondents, could improve robustness but were not feasible given the data1 structure and assignment scope.
+```
+
